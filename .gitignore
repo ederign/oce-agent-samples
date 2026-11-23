@@ -1,0 +1,13 @@
+# Credentials and local install state never belong in this repository.
+.env
+.env.*
+*.key
+*.pem
+*-key.json
+*service-key*.json
+*secret*.json
+kubeconfig*
+*.kubeconfig
+openai-key
+*-api-key
+.DS_Store
