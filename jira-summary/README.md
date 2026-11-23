@@ -14,6 +14,8 @@ summary to `artifacts/<KEY>-summary.md`. It only reads Jira.
   Namespace, register the model credential, deploy and remove the Agent with `occ`.
 - `publish-skill.sh`: saves the skill to the Agent's Skill Library and shares it.
 - `install-workspace-skill.sh`: copies the skill into the worker workspace instead.
+- `install-jira-settings.sh`: writes `JIRA_SERVER` and `JIRA_USER` (not secret)
+  to `/sandbox/enterprise/jira.env` on the worker, where the skill loads them.
 
 ## Deploy
 
@@ -29,7 +31,20 @@ Then open the Agent UI and ask: "Summarize Jira issue <KEY>".
 
 ## Jira credentials
 
-Without Jira credentials the script exits 2 and the Agent says which variables
-are missing. Keep the token out of the sandbox: register it as an OCE
-`bearer-token` credential source with `env_var: JIRA_TOKEN` and bind it to the
-Agent, so the sandbox only ever holds a placeholder.
+The skill runs on the Agent's dedicated worker. Without Jira settings the script
+exits 2 and the Agent says which variables are missing.
+
+- **Token:** keep it out of the sandbox. Register it as an OCE `bearer-token`
+  credential source (`host: <your-site>.atlassian.net`, `env_var: JIRA_TOKEN`)
+  and bind it to the Agent. The sandbox only holds a placeholder; OpenShell
+  swaps in the real token on requests from `toolBinaries` to that host. The
+  Installation must list the real Python path in `toolBinaries`
+  (`/usr/bin/python3.11` in the runtime image, not the `python3` symlink).
+- **Server and user:** not secret. Write them to the worker with
+  `install-jira-settings.sh`. This file stands in for a way to set non-secret
+  Agent environment on a worker, which OCE does not offer yet.
+
+On a dedicated worker the OpenClaw runtime passes only an allowlist of
+environment variables to tools, so `JIRA_TOKEN` also needs a runtime patch like
+OCE's existing Google one (`deploy/runtime/openclaw-google-worker-placeholder.patch`).
+Without it the script reports `JIRA_TOKEN` missing.

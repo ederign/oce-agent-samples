@@ -9,14 +9,16 @@ metadata: {"openclaw": {"requires": {"bins": ["python3"]}}}
 Use this skill when the user gives a Jira issue key (for example `RHAIRFE-1234`)
 and asks for a summary.
 
-1. Fetch the issue. Run the script exactly as written, with the key as its only
-   argument:
+1. Fetch the issue. Run this as one command, exactly as written, with the key
+   as the script's only argument:
 
    ```sh
-   python3 {baseDir}/scripts/fetch_issue.py <KEY>
+   set -a; [ -f /sandbox/enterprise/jira.env ] && . /sandbox/enterprise/jira.env; set +a; python3 {baseDir}/scripts/fetch_issue.py <KEY>
    ```
 
-   It prints the issue as JSON on stdout.
+   The first part loads the non-secret Jira settings (`JIRA_SERVER`,
+   `JIRA_USER`) when the workspace has them. Never print that file or any
+   environment variable. The script prints the issue as JSON on stdout.
 
 2. If the script exits with code 2, Jira credentials are not available to it.
    Tell the user which variables it named and stop. Do not ask for a token in

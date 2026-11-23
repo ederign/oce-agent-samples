@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Saves skill/jira-summary (SKILL.md and scripts/) to the deployed Agent's
-# OpenClaw Skill Library and shares it, so new sessions can select it.
+# OpenClaw Skill Library (a new revision if it is already there) and shares it,
+# so new sessions can select it.
 # Runs the openclaw CLI inside the Agent's Gateway container, which already
 # holds the Gateway's own credentials; nothing secret passes through here.
 #
@@ -25,9 +26,18 @@ bundle=/tmp/jira-summary-skill                                         # tempora
 gateway rm -rf "$bundle"                                               # clear any copy left by an earlier run
 COPYFILE_DISABLE=1 tar --no-xattrs -C "$here/skill" -cf - jira-summary |
   gateway sh -c "mkdir -p $bundle && tar -C $bundle -xf -"             # copy the skill folder in, keeping executable bits; no macOS ._ metadata files
-skill=$(gateway openclaw skills library create "$bundle/jira-summary" --slug jira-summary --json)  # save it as a Skill Library revision
+existing=$(gateway openclaw skills library list --json |
+  jq -c '[.. | objects | select(.slug? == "jira-summary")] | first // empty')  # an earlier publish of this skill, if any
+if [ -n "$existing" ]; then                                            # already in the library: save a new revision of it
+  skill=$(gateway openclaw skills library update "$(jq -er .skillId <<<"$existing")" "$bundle/jira-summary" \
+    --expected-revision "$(jq -er .revision <<<"$existing")" --json)  # replace the bundle; a conflicting revision is refused, never overwritten
+else                                                                   # first publish: create it
+  skill=$(gateway openclaw skills library create "$bundle/jira-summary" --slug jira-summary --json)  # save it as a Skill Library revision
+fi
 echo "$skill" | jq . >&2                                               # show what the Gateway stored
 skill_id=$(jq -er '.skillId // .entry.skillId' <<<"$skill")            # the skill's stable ID
 revision=$(jq -er '.revision // .entry.revision' <<<"$skill")          # the revision hash just saved
-gateway openclaw skills library share "$skill_id" --expected-revision "$revision" --json | jq . >&2  # make it visible to other profiles, such as your console chat
+if [ "$(jq -r '.shared // false' <<<"${existing:-{\}}")" != true ]; then  # share once; an updated shared skill stays shared
+  gateway openclaw skills library share "$skill_id" --expected-revision "$revision" --json | jq . >&2  # make it visible to other profiles, such as your console chat
+fi
 gateway rm -rf "$bundle"                                               # remove the temporary copy; the library keeps its own
