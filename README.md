@@ -7,3 +7,4 @@ instructions, skills and scripts.
 | Sample | What it does |
 | --- | --- |
 | [jira-summary](jira-summary/) | Fetches one Jira issue by key and writes a short markdown summary. Reads Jira only. |
+| [review-team](review-team/) | Spawns reviewer child sessions on an RFE, waits for their verdicts and writes one summary. Includes a local reproducer for four worker-session bugs. |
