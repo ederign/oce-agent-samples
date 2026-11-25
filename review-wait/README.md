@@ -52,6 +52,7 @@ with a 30 second deadline unless the tool declares a longer one, and
 - `namespace.sh`, `model-source.sh`, `deploy.sh`, `delete.sh`: create the
   Namespace, register the model credential, deploy and remove the Agent with `occ`.
 - `publish-skill.sh`: saves the skill to the Agent's Skill Library and shares it.
+- `repro-local.sh`: a local before-and-after reproducer on plain OpenClaw, described below.
 - `evidence.sh`: prints every wait call of a run from the Gateway's transcript,
   with the timeout asked for, how long the call really took and what it
   returned. The model's own reply can leave out a failed call.
@@ -101,3 +102,47 @@ it: "Run the review with suffix 2."
 
 The only credential is the model key. `model-source.sh` reads it from a file
 and stores it as a Namespace Secret.
+
+## Local reproducer (not part of the occ layout)
+
+`repro-local.sh` is not an OCE deployment script. It runs on plain OpenClaw
+built from source, on one machine, and shows the same cut-off with and without
+a worker, before and after a fix. It talks to no OCE install.
+
+It starts one Gateway and one paired node worker, `wait-worker`. The node has
+its own HOME, TMPDIR, state dir and workspace, so it shares nothing with the
+Gateway except the Gateway-node protocol, the way a worker on another host
+would. Every process runs under `env -i` with an allowlist of variables. Only
+the Gateway gets the OpenAI key.
+
+Each case asks the agent to spawn a child that runs `sleep 35` and to wait for
+it once with `{"action": "wait", "timeoutSeconds": 55}`. It prints how long the
+wait really took, what it returned, and when the child finished.
+
+Requirements: Node 24 first on `PATH`, `jq`, `git`, `openssl`, and an openclaw
+checkout already built with `pnpm install` and `pnpm build`.
+
+```sh
+export OPENCLAW_SRC=/path/to/openclaw          # built checkout
+export OPENAI_API_KEY_FILE=/path/to/key-file   # read only by the script, never printed
+export REPRO_STATE_DIR=/path/to/empty-dir      # all state and logs
+export REPRO_PORT=19330                        # optional; Gateway port on loopback
+
+./repro-local.sh start
+./repro-local.sh gateway   # agent on the Gateway
+./repro-local.sh worker    # agent placed on the node worker
+./repro-local.sh stop
+```
+
+What it printed for us, on main and on a checkout with the fix:
+
+```text
+main, gateway:   wait took 38.5 s: {"status":"ok","action":"wait","reason":"completed",...}
+main, worker:    wait took 31.4 s: {"status":"error","tool":"dispatch_action","error":"worker gateway-tool response timed out"}
+                 child finished 39.8 s after the wait started
+fix, worker:     wait took 41.1 s: {"status":"ok","action":"wait","reason":"completed",...}
+                 child finished 40.9 s after the wait started
+```
+
+To compare two checkouts, use a separate `REPRO_STATE_DIR` and port for each.
+`stop` leaves `REPRO_STATE_DIR` in place.
